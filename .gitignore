@@ -15,3 +15,20 @@
 *.exe
 *.out
 *.app
+
+# texts and rep
+*.txt
+*.rep
+
+# Unwanted files
+fcyc.c
+fcyc.h
+fsecs.c
+fsecs.h
+ftimer.c
+ftimer.h
+mdriver.c
+mdriver.h
+memlib.c
+memlib.h
+
