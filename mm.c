@@ -4,11 +4,11 @@
  * You __MUST__ add your user information here and in the team array bellow.
  * 
  * === User information ===
- * Group: NONE
- * User 1: dude10
- * SSN: 1807825919
- * User 2: 
- * SSN: X
+ * Group: GroupGroup
+ * User 1: fannarf12
+ * SSN: 2709892339
+ * User 2: thorsteinnts09
+ * SSN: 2903892169
  * === End User Information ===
  */
 
@@ -36,7 +36,7 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "Bananar",
+    "GroupGroup",
     /* First member's full name */
     "Fannar Már Flosason",
     /* First member's email address */
@@ -100,8 +100,8 @@ static void *mm_coalesce(void *bp);
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
-{
-    	
+{   
+	/* mem_sbrk increments the heap and returns the old pointer */	
 	if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
 		return -1;
 	
@@ -112,9 +112,14 @@ int mm_init(void)
 	heap_listp += (2*WSIZE);
 
 	/* Extend the empty heap with a free block of CHUNKSIZE bytes */
-	if (mm_extend_heap(CHUNKSIZE/WSIZE) == NULL)
-		return -1;	
-
+	
+	/*
+	 * Depends on mem_sbrk if necessary to allocate more free heap.
+	 * If mem_sbrk is relatively fast it can be called each time
+	 * memory is allocated.
+ 	 * if (mm_extend_heap(CHUNKSIZE/WSIZE) == NULL)
+	 *	return -1;	
+	 */
 	return 0;
 }
 

@@ -20,6 +20,9 @@
 *.txt
 *.rep
 
+# Header files
+*.h
+
 # Unwanted files
 fcyc.c
 fcyc.h
