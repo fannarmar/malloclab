@@ -103,7 +103,7 @@ team_t team = {
 /* Helper macros for testing */
 #define PRINT_ROOT_POINTER(bp)	(printf("heap_listp: %p\n", (char *)(bp)))
 
-static char *rootp; /* ptr that points to the root of the free list. */
+static char *rootp = NULL; /* ptr that points to the root of the free list. */
 static char *endp = NULL; /* ptr that points to the last block in the free list. */
 static int malcount = 0;
 
@@ -193,14 +193,6 @@ static void *mm_extend_heap(size_t words)
 	
 	PUT(SUCC(bp), 0);  /* Successor - is last free block */
 
-	/* If no free block is in the free heap, new free block becomes root */
-	if (rootp == 0)
-		rootp = bp;
-
-	/* Set endp as free block */
-	endp = bp;
-
-
 	/* Coalesce if the previous block was free */
 	return mm_coalesce(bp);
 }
@@ -215,6 +207,11 @@ static void *mm_coalesce(void *bp)
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp))); /* Checks if next block is allocated */
 	size_t size = GET_SIZE(HDRP(bp));
 
+	char *adjr_block;	/* Right adjacent block */
+	char *adjl_block; 	/* Left adjacent block */
+	char *succ_block;	/* Successor block in free list*/
+	char *pred_block;	/* Predecessor block in free list*/
+
 	/* TODO! For use in explicit free linked list:
 	 * 	The predecessor pointer in the free block needs to be updated
 	 * 	to the previous free block.
@@ -227,6 +224,24 @@ static void *mm_coalesce(void *bp)
 	/* Case 1 - No adjacent free blocks (Both allocated) */
 	if (prev_alloc && next_alloc)
 	{
+		/* Free list updated */
+		if (endp == bp)
+		{
+			/* Free list empty */
+			endp = bp;
+			rootp = bp;
+		}
+		else
+		{	
+			/* Add free block to front of list.
+			 * Old root's predecessor becomes bp.
+			 * bp's successor becomes the old root
+			 * and bp becomes the root */
+			PUT(PRED(rootp),*(unsigned int *)bp);
+			PUT(SUCC(bp), *(unsigned int *)rootp);
+			rootp = bp;
+		}
+		
 		return bp;
 	}
 
@@ -238,8 +253,40 @@ static void *mm_coalesce(void *bp)
  		 * The header and footer are given the new size and an unallocated attribute.
  		 */
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp))); 
+		
+		/* Mark block as free */
 		PUT(HDRP(bp), PACK(size, 0)); /* Header */
 		PUT(FTRP(bp), PACK(size, 0)); /* Footer address is located with HDRP(bp) and size */
+
+		/* Update free list */
+		adjr_block = NEXT_BLKP(bp);
+		
+		if (SUCC(adjr_block) != 0)
+		{
+			/* The block to be merged is not the last block in the freelist*/
+			succ_block = SUCC(adjr_block);
+			PUT(SUCC(bp), *(unsigned int *)succ_block);
+			PUT(PRED(succ_block), *(unsigned int *)bp);
+		}
+		else
+		{
+			PUT(SUCC(bp), 0);
+		}
+		
+		if (PRED(adjr_block) != 0)
+		{
+			/* The block to be merged is not the first block in the freelist*/
+			pred_block = PRED(adjr_block);
+			PUT(PRED(bp),*(unsigned int *) pred_block);
+			PUT(SUCC(pred_block), *(unsigned int *)bp);
+		}
+		else
+		{
+			PUT(PRED(bp), 0);
+		}
+
+		printf("\n");
+		printf("Coalesce! after merger! - CASE 2 \n");
 	}
 
 	/* Case 3 - Left adjacent block is free but not the right */
@@ -253,10 +300,29 @@ static void *mm_coalesce(void *bp)
  		 * The current block pointer is set as left adjacent block pointer.
  		 */
   
-		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+		/*size += GET_SIZE(HDRP(PREV_BLKP(bp)));
 		PUT(FTRP(bp), PACK(size, 0)); 
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); 
-		bp = PREV_BLKP(bp);
+		bp = PREV_BLKP(bp);*/
+	
+		/*
+ 		 * The size of the adjacent block is added to the current block.
+ 		 * The header and footer are given the new size and an unallocated attribute.
+ 		 */
+		
+		adjl_block = PREV_BLKP(bp);
+		size += GET_SIZE(HDRP(adjl_block));
+		printf("+++++ size: %d \n", size);			
+
+		/* Enlarge left adjacent block */
+		PUT(HDRP(adjl_block), PACK(size, 0));
+		PUT(FTRP(adjl_block), PACK(size, 0));
+	
+		bp = adjl_block;
+	
+		printf("\n");
+		printf("Coalesce! after merger! - CASE 3 \n");
+
 	}
 
 	/* Case 4 - Both left and right adjacent blocks are free */
@@ -274,6 +340,18 @@ static void *mm_coalesce(void *bp)
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
+
+		/* Update free list */
+		adjr_block = NEXT_BLKP(bp);
+		pred_block = PRED(adjr_block);
+		succ_block = SUCC(adjr_block);
+		
+		PUT(pred_block, *(unsigned int *)succ_block);
+		PUT(succ_block, *(unsigned int *)pred_block);
+
+	
+		printf("\n");
+		printf("Coalesce! after merger! - CASE 4 \n");
 	}
 	
 	/* COALESCE DEBUG */
@@ -298,7 +376,7 @@ static void *mm_coalesce(void *bp)
 static void *mm_find_fit(size_t adjusted_size)
 {	
 	/* No free heap */
-	if (rootp == 0)
+	if (endp == NULL)
 		return NULL;
 
 	/* 
@@ -347,8 +425,6 @@ static void mm_place(void *bp, size_t adjusted_size)
 
 	/* Allocate memory */
 	PUT(HDRP(bp), PACK(adjusted_size, 1)); /* Allocated block header */
-	printf("---Adjusted size: %d \n", adjusted_size);
-	printf("---Malloc block footer: %p \n", FTRP(bp));
 	PUT(FTRP(bp), PACK(adjusted_size, 1)); /* Allocated block footer */
 
 	printf("Malloc Footer (data): %d \n", GET_SIZE(FTRP(bp)));
@@ -399,10 +475,11 @@ static void mm_place(void *bp, size_t adjusted_size)
 	}
 	else
 	{
-		if (bp == rootp)
+		if (bp == endp)
 		{
-			rootp = 0;
-			endp = 0;
+			/* Free list is empty */
+			rootp = NULL;
+			endp = NULL;
 		}
 	}
 	
@@ -435,7 +512,7 @@ void *mm_malloc(size_t size)
 	if ((bp = mm_find_fit(adjusted_size)) != NULL)
 	{
 		/* Place block inside free heap */
-		mm_place(bp, adjusted_size);
+		mm_place(bp, adjusted_size);	
 		return bp;
 	}
 	else
@@ -450,10 +527,40 @@ void *mm_malloc(size_t size)
 }
 
 /*
- * mm_free - Freeing a block does nothing.
+ * mm_free - Freeing a previously allocated block.
  */
 void mm_free(void *ptr)
 {
+	char *block_head;
+	char *block_foot;
+
+	char *block_pred;
+	char *block_succ;
+	
+	size_t block_size;
+	
+	/* Freed block initialized*/
+	block_head = HDRP(ptr);
+	block_foot = FTRP(ptr);
+	block_size = GET_SIZE(block_head);
+	
+	block_pred = PRED(ptr);
+	block_succ = SUCC(ptr);
+
+	/* Values updated for freed block */
+	PUT(block_head, PACK(block_size, 0)); 	/* Free block header */
+	PUT(block_foot, PACK(block_size, 0));	/* Free block footer */
+	
+	/* LIFO free list. Block successor points to previous root block and
+ 		the new root becomse this block */
+	PUT(block_pred, 0);
+	PUT(block_succ, *(unsigned int *)rootp);
+	rootp = ptr;
+	
+	
+	mm_coalesce(ptr);
+
+	
 }
 
 /*
