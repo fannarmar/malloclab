@@ -77,15 +77,6 @@ team_t team = {
 #define GET_SIZE(p) 	(GET(p) & ~0x7) /* Mask out the bottom 3 bits */
 #define GET_ALLOC(p) 	(GET(p) & 0x1)  /* Mask out all but the lowest bit */
 
-/* End of free list attributes. Second left most bit: Last free block. Third left most bit: First free block */
-#define SET_FIRST_FREE(p)	(GET(p) | 0x4)
-#define SET_LAST_FREE(p)	(GET(p) | 0x2)
-
-#define SET_NOT_FIRST_FREE(p)	(GET(p) & ~0x4)
-#define SET_NOT_LAST_FREE(p)	(GET(p) & ~0x2)
-
-#define GET_FIRST_FREE		((GET(p) & 0x4) >> 2)
-#define GET_LAST_FREE		((GET(p) & 0x2) >> 1)
 
 /* Given block ptr bp, compute address of its header and footer */
 #define HDRP(bp)	((char *)(bp) - WSIZE)
@@ -105,7 +96,6 @@ team_t team = {
 
 static char *rootp = NULL; /* ptr that points to the root of the free list. */
 static char *endp = NULL; /* ptr that points to the last block in the free list. */
-static int malcount = 0;
 
 static void *mm_extend_heap(size_t words);
 static void *mm_coalesce(void *bp);
@@ -136,34 +126,6 @@ int mm_init(void)
 		return -1;	
 
 
-	//rootp += (4*WSIZE); /* rootp points to the payload of the first free block */
-	/* endp points to the payload of the last free block (first == last) */
-
-	/* INIT DEBUG */
-
-	printf("Low heap: %p \n", mem_heap_lo());	
-	printf("rootp: %p \n", rootp);	
-	printf("endp: %p \n", endp);
-
-	printf("Epilogue footer: %p \n", HDRP(rootp) - WSIZE);
-	printf("Epilogue footer (data): %d \n", *(HDRP(rootp) - WSIZE));	
-
-	printf("FreeHeapHeader: %p \n", HDRP(rootp));	
-	printf("FreeHeapHeader (data): 0x%x \n", *(unsigned int *)HDRP(rootp));	
-	printf("endp: %p \n", endp);
-
-	printf("Predecessor: %p \n", PRED(rootp));	
-	printf("Predecessor (data): %d \n", *(PRED(rootp)));	
-	printf("Successor: %p \n", SUCC(rootp));	
-	printf("Successor (data): %d \n", *(SUCC(rootp)));	
-	
-	printf("FreeHeapFooter: %p \n", FTRP(rootp));	
-	printf("FreeHeapFooter (Data): 0x%x \n", *(unsigned int *)FTRP(rootp));		
-
-	printf("END OF INIT \n");
-	printf("\n");
-
-	
 	return 0;
 }
 
@@ -284,9 +246,6 @@ static void *mm_coalesce(void *bp)
 		{
 			PUT(PRED(bp), 0);
 		}
-
-		printf("\n");
-		printf("Coalesce! after merger! - CASE 2 \n");
 	}
 
 	/* Case 3 - Left adjacent block is free but not the right */
@@ -312,7 +271,6 @@ static void *mm_coalesce(void *bp)
 		
 		adjl_block = PREV_BLKP(bp);
 		size += GET_SIZE(HDRP(adjl_block));
-		printf("+++++ size: %d \n", size);			
 
 		/* Enlarge left adjacent block */
 		PUT(HDRP(adjl_block), PACK(size, 0));
@@ -320,8 +278,6 @@ static void *mm_coalesce(void *bp)
 	
 		bp = adjl_block;
 	
-		printf("\n");
-		printf("Coalesce! after merger! - CASE 3 \n");
 
 	}
 
@@ -350,20 +306,7 @@ static void *mm_coalesce(void *bp)
 		PUT(succ_block, *(unsigned int *)pred_block);
 
 	
-		printf("\n");
-		printf("Coalesce! after merger! - CASE 4 \n");
 	}
-	
-	/* COALESCE DEBUG */
-	printf("\n");
-	printf("Coalesce! after merger! \n");
-	printf("New free block base pointer: %p \n", bp);
-	printf("New free block Header: %p \n", HDRP(bp));
-	printf("New free block Header (data): %d \n", GET_SIZE(HDRP(bp)));
-	printf("New free block Footer: %p \n", FTRP(bp));
-	printf("New free block Footer (data): %d \n", GET_SIZE(FTRP(bp)));
-	printf("\n");
-	
 
 	return bp;		
 
@@ -385,11 +328,6 @@ static void *mm_find_fit(size_t adjusted_size)
 	 */
 	char *runner = rootp; /* Root of free list */
 
-	/* mm_find_fit DEBUG */
-	
-	printf("runner pointer: %p \n", runner);
-	printf("Current free block Size: %d \n", GET_SIZE(HDRP(runner)));
-	
 	while (GET_SIZE(HDRP(runner)) < adjusted_size)
 	{
 		if (*SUCC(runner) == 0)
@@ -413,7 +351,6 @@ static void mm_place(void *bp, size_t adjusted_size)
 	size_t current_freeblock_size;
 	size_t new_freeblock_size;
 
-	printf("Base pointer: %p \n", bp);
 
 	/* Current predecessor and successor of the 
 	 * free block about to be allocated */
@@ -427,19 +364,6 @@ static void mm_place(void *bp, size_t adjusted_size)
 	PUT(HDRP(bp), PACK(adjusted_size, 1)); /* Allocated block header */
 	PUT(FTRP(bp), PACK(adjusted_size, 1)); /* Allocated block footer */
 
-	printf("Malloc Footer (data): %d \n", GET_SIZE(FTRP(bp)));
-
-
-
-	
-	/* mm_place - DEBUG */
-	printf("New malloced block size: %d \n", adjusted_size);
-	printf("Malloc Header: %p \n", HDRP(bp));
-	printf("Malloc Header (data): %d \n", GET_SIZE(HDRP(bp)));
-	printf("Malloc Footer: %p \n", FTRP(bp));
-	printf("Malloc Footer (data): %d \n", GET_SIZE(FTRP(bp)));
-
-	printf("\n");	
 	
 	/* Adjust new free block if any*/
 	if (new_freeblock_size > 0)
@@ -466,12 +390,6 @@ static void mm_place(void *bp, size_t adjusted_size)
 		/* Increments runner if new free block is the last free block */
 		if (bp == rootp)
 			rootp = new_freeblock_bp;
-		
-		printf("Adjusted Free Heap, size: %d \n", new_freeblock_size);
-		printf("Adjusted Free Heap Header: %p \n", HDRP(new_freeblock_bp));	
-		printf("Adjusted Free Heap Header (data): %d \n", GET_SIZE(HDRP(new_freeblock_bp)));
-		printf("Adjusted Free Heap Footer: %p \n", FTRP(new_freeblock_bp));	
-		printf("Adjusted Free Heap Footer (data): %d \n", GET_SIZE(FTRP(new_freeblock_bp)));
 	}
 	else
 	{
@@ -482,11 +400,7 @@ static void mm_place(void *bp, size_t adjusted_size)
 			endp = NULL;
 		}
 	}
-	
-	printf("END OF PLACE\n");
-	printf("\n");
 }
-
 
 /* 
  * mm_malloc - Allocate a block by incrementing the brk pointer.
@@ -498,10 +412,6 @@ void *mm_malloc(size_t size)
 	size_t adjusted_size = ALIGN(size + SIZE_T_SIZE);
 	char *bp;
 	size_t words;
-
-	/* MALLOC DEBUG */
-	printf("Malloc count: %d \n", malcount++);
-	printf("Malloced size: %d \n", adjusted_size);	
 
 
 	/* Ignore spurious requests */
@@ -519,7 +429,6 @@ void *mm_malloc(size_t size)
 	{	
 		words = (adjusted_size > CHUNKSIZE) ? (adjusted_size + CHUNKSIZE)/WSIZE : CHUNKSIZE/WSIZE;
 		
-		printf("Extended Heap: %d \n", words*WSIZE);
 		bp = mm_extend_heap(words);
 		mm_place(bp, adjusted_size);
 		return bp;
@@ -583,16 +492,65 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
+/* 
+ * Heap consistency checker
+ * Return non-zero if consistent, return 0 of not consistent
+ */
 
+ int mm_check(void)
+ {
+	char* p_heap_start = mem_heap_lo();
+	char* p_heap_end = mem_heap_hi();
+	char* runner;
+	
+	/* 
+	 * Check for overlap of blocks		
+	 */
+	
+	runner = p_heap_start;
+	runner += (4*WSIZE);    //Jump over alignment padding, prologue hdr and ftr, and first block hdr
 
+	while (runner < p_heap_end)
+	{
+		runner = NEXT_BLKP(runner);
+		if (!((runner - WSIZE) == FTRP(PREV_BLKP(runner))))
+		{
+			 printf("Footer of prev block not left of header of current block\n");
+			 return 0;
+		}
+	}
 
+	/*
+	 * Check if every block in free list is indeed free
+	 */
+	
+	runner = rootp;
 
+	while (runner != 0)
+	{
+		if (GET_ALLOC(HDRP(runner)))
+		{
+			 printf("Node in free list not free\n");
+			 return 0;
+		}
+		runner = (char*) (SUCC(runner));
+	}
 
+	/*
+	 * Check if there are two contiguous free blocks
+	 */
+	
+	runner = p_heap_start + (4*WSIZE);
+	
+	while (runner < p_heap_end)
+	{
+		if (!GET_ALLOC(HDRP(runner)) && !GET_ALLOC(HDRP(NEXT_BLKP(runner))))
+		{
+			printf("Two contiguous free blocks\n");
+			return 0;
+		}
+	}
 
-
-
-
-
-
-
+	return 1;
+ }
 
