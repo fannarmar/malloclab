@@ -139,7 +139,7 @@ int mm_init(void)
 	endp = rootp; /* endp points to the payload of the last free block (first == last) */
 
 	/* INIT DEBUG */
-	/*
+
 	printf("Low heap: %p \n", mem_heap_lo());	
 	printf("rootp: %p \n", rootp);	
 	printf("endp: %p \n", endp);
@@ -157,8 +157,12 @@ int mm_init(void)
 	printf("Successor (data): %d \n", *(SUCC(rootp)));	
 	
 	printf("FreeHeapFooter: %p \n", FTRP(rootp));	
-	printf("FreeHeapFooter (Data): %p \n", FTRP(rootp));		
-	*/
+	printf("FreeHeapFooter (Data): 0x%x \n", *(unsigned int *)FTRP(rootp));		
+
+	printf("END OF INIT \n");
+	printf("\n");
+
+	
 	return 0;
 }
 
@@ -276,17 +280,21 @@ static void *mm_find_fit(size_t adjusted_size)
 	 * pointer that jumps between free blocks until a sufficient block
 	 * is found.
 	 */
-	
 	char *runner = rootp; /* Root of free list */
+
+	/* mm_find_fit DEBUG */
 	
-	while (GET_SIZE(runner) < adjusted_size)
+	printf("runner pointer: %p \n", runner);
+	printf("Current free block Size: %d \n", GET_SIZE(HDRP(runner)));
+	
+	while (GET_SIZE(HDRP(runner)) < adjusted_size)
 	{
 		if (runner == 0)
 			return NULL;
-		runner = (char *)(runner + (1*WSIZE)); /* points to next free block */
+		runner = (char *)(SUCC(runner)); /* points to next free block */
 	}
 	
-	return runner + WSIZE;
+	return runner;
 }
 
 /*
@@ -300,12 +308,14 @@ static void mm_place(void *bp, size_t adjusted_size)
 	char *current_predecessor_p;
 	char *current_successor_p;
 	size_t current_freeblock_size;
+	size_t new_freeblock_size;
 
 	/* Current predecessor and successor of the 
 	 * free block about to be allocated */
 	current_predecessor_p = PRED(bp);
 	current_successor_p = SUCC(bp);
-	current_freeblock_size = GET_SIZE(bp);
+	current_freeblock_size = GET_SIZE(HDRP(bp));
+	new_freeblock_size = current_freeblock_size - adjusted_size;
 
 	/* Allocate memory */
 	PUT(HDRP(bp), PACK(adjusted_size, 1)); /* Allocated block header */
@@ -313,11 +323,12 @@ static void mm_place(void *bp, size_t adjusted_size)
 	
 	/* Adjust new free block */
 	new_freeblock_bp = NEXT_BLKP(bp);
-	PUT(HDRP(new_freeblock_bp), PACK((current_freeblock_size - adjusted_size), 0));
-	PUT(FTRP(new_freeblock_bp), PACK((current_freeblock_size - adjusted_size), 0));
+	PUT(HDRP(new_freeblock_bp), PACK(new_freeblock_size, 0));
+	PUT(FTRP(new_freeblock_bp), PACK(new_freeblock_size, 0));
 	PUT(PRED(new_freeblock_bp), *current_predecessor_p);
 	PUT(SUCC(new_freeblock_bp), *current_successor_p); 
 	
+	/* Adjust previous and next free blocks to point to adjusted free block */
 	if (!GET_SIZE(current_predecessor_p))
 	{	
 		prev_bp = (char *)current_predecessor_p;
@@ -328,8 +339,32 @@ static void mm_place(void *bp, size_t adjusted_size)
 		next_bp = (char *)current_successor_p;
 		PUT(PRED(next_bp),*(unsigned int *)new_freeblock_bp);	
 	}
+
+	/* Increments runner if new free block is the last free block */
+	if (bp == rootp)
+		rootp = new_freeblock_bp;
 	
 
+	/* mm_place - DEBUG */
+	printf("New malloced block size: %d \n", adjusted_size);
+	printf("Malloc Header: %p \n", HDRP(bp));
+	printf("Malloc Header (data): %d \n", *HDRP(bp));
+	printf("Malloc Footer: %p \n", FTRP(bp));
+	printf("Malloc Footer (data): %d \n", *FTRP(bp));
+
+	printf("\n");	
+
+	printf("Adjusted Free Heap, size: %d \n", new_freeblock_size);
+
+	printf("Adjusted Free Heap Header: %p \n", HDRP(new_freeblock_bp));	
+	printf("Adjusted Free Heap Header (data): %d \n", GET_SIZE(HDRP(new_freeblock_bp)));
+	printf("Adjusted Free Heap Footer: %p \n", FTRP(new_freeblock_bp));	
+	printf("Adjusted Free Heap Footer (data): %d \n", GET_SIZE(FTRP(new_freeblock_bp)));	
+	
+
+	
+	printf("END OF PLACE\n");
+	printf("\n");
 }
 
 
@@ -342,6 +377,11 @@ void *mm_malloc(size_t size)
 	/* New block size adjusted to next 8 byte block size + 8 bytes for header and footer */
 	size_t adjusted_size = ALIGN(size + SIZE_T_SIZE);
 	char *bp;
+	size_t words;
+
+	/* MALLOC DEBUG */
+	printf("Malloced size: %d \n", adjusted_size);	
+
 
 	/* Ignore spurious requests */
 	if (size == 0)
@@ -353,18 +393,14 @@ void *mm_malloc(size_t size)
 		/* Place block inside free heap */
 		mm_place(bp, adjusted_size);
 		return bp;
+	}
+	else
+	{	
+		words = adjusted_size > CHUNKSIZE ? (adjusted_size + CHUNKSIZE)/WSIZE : CHUNKSIZE/WSIZE;
+		bp = mm_extend_heap(words);
+		mm_place(bp, adjusted_size);
+		return bp;
 	}	
-
-
-	
-   	void *p = mem_sbrk(adjusted_size);
-    	if (p == (void *)-1)
-		return NULL;
-    	else {
-        	*(size_t *)p = size;
-        
-	return (void *)((char *)p + SIZE_T_SIZE);
-    }
 }
 
 /*
