@@ -92,8 +92,8 @@ team_t team = {
 #define FTRP(bp)	((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 /* Given free block ptr bp, compute address of its predecessor and successor */
-#define PRED(bp)	((char *)(HDRP(bp)))
-#define SUCC(bp)	((char *)((HDRP(bp)) + WSIZE))
+#define PRED(bp)	((char *)(HDRP(bp) + (1*WSIZE)))
+#define SUCC(bp)	((char *)((HDRP(bp)) + (2*WSIZE)))
 
 /* Given block ptr bp, compute address of next and previous blocks */
 #define NEXT_BLKP(bp)	((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
@@ -138,15 +138,27 @@ int mm_init(void)
 	//rootp += (4*WSIZE); /* rootp points to the payload of the first free block */
 	endp = rootp; /* endp points to the payload of the last free block (first == last) */
 
-
+	/* INIT DEBUG */
+	/*
 	printf("Low heap: %p \n", mem_heap_lo());	
 	printf("rootp: %p \n", rootp);	
-	printf("endp: %p \n", endp);	
+	printf("endp: %p \n", endp);
 
-	printf("FreeHeapHeader %p \n", HDRP(rootp));	
-	printf("FreeHeapHeader (data): 0x%x \n", *(unsigned int *)HDRP(rootp) );	
-	printf("endp: %p \n", endp);	
+	printf("Epilogue footer: %p \n", HDRP(rootp) - WSIZE);
+	printf("Epilogue footer (data): %d \n", *(HDRP(rootp) - WSIZE));	
+
+	printf("FreeHeapHeader: %p \n", HDRP(rootp));	
+	printf("FreeHeapHeader (data): 0x%x \n", *(unsigned int *)HDRP(rootp));	
+	printf("endp: %p \n", endp);
+
+	printf("Predecessor: %p \n", PRED(rootp));	
+	printf("Predecessor (data): %d \n", *(PRED(rootp)));	
+	printf("Successor: %p \n", SUCC(rootp));	
+	printf("Successor (data): %d \n", *(SUCC(rootp)));	
 	
+	printf("FreeHeapFooter: %p \n", FTRP(rootp));	
+	printf("FreeHeapFooter (Data): %p \n", FTRP(rootp));		
+	*/
 	return 0;
 }
 
@@ -168,17 +180,12 @@ static void *mm_extend_heap(size_t words)
 	PUT(FTRP(bp), PACK(size, 0));		/* Free block footer */
 	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));	/* New epilogue header */
 
-	printf("bp: %p\n", bp);
-	printf("Header: %p \n", HDRP(bp));
-	printf("Header (data): 0x%x \n", *(unsigned int *)HDRP(bp));
-
-
 	/* Set predeccessor and successor pointers */
 	if (endp == NULL)
 		PUT(PRED(bp), 0); /* No free block in list */
 	else
 		PUT(PRED(bp), *endp); /* endp points to last free block */
-
+	
 	PUT(SUCC(bp), 0);  /* Successor - is last free block */
 
 	/* Coalesce if the previous block was free */
